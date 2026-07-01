@@ -1,0 +1,23 @@
+# Build artefacts
+build/
+*.o
+*.a
+*.so
+
+# Git
+.git/
+.gitignore
+
+# Docker metadata (not needed inside the image, but docker/ dir IS needed for entrypoint)
+Dockerfile
+docker-compose.yml
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs / data
+*.log
+*.csv

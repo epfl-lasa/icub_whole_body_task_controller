@@ -1,0 +1,24 @@
+services:
+
+  icub-controller-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        JOBS: "4"
+    image: icub-controller:latest
+
+    network_mode: host
+
+    environment:
+      DISPLAY: "${DISPLAY}"
+      XAUTHORITY: "${XAUTHORITY}"
+      # Force Mesa software rendering — no GPU passthrough in the container.
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - .:/workspace/icub_whole_body_task_controller
+
+    stdin_open: true
+    tty: true
