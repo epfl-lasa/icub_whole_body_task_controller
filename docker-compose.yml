@@ -10,11 +10,13 @@ services:
 
     network_mode: host
 
+    runtime: nvidia
+
     environment:
       DISPLAY: "${DISPLAY}"
       XAUTHORITY: "${XAUTHORITY}"
-      # Force Mesa software rendering — no GPU passthrough in the container.
-      LIBGL_ALWAYS_SOFTWARE: "1"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: graphics,display,utility
 
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
