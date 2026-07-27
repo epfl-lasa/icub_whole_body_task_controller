@@ -1589,13 +1589,13 @@ bool RobotInterface::applyExternalWrench(yarp::os::RpcClient &inPort, std::strin
 
     // cmd.clear();
     cmd.addString(link);
-    cmd.addFloat64(Wrench[0]);
-    cmd.addFloat64(Wrench[1]);
-    cmd.addFloat64(Wrench[2]);
-    cmd.addFloat64(Wrench[3]);
-    cmd.addFloat64(Wrench[4]);
-    cmd.addFloat64(Wrench[5]);
-    cmd.addFloat64(duration);
+    cmd.addDouble(Wrench[0]);
+    cmd.addDouble(Wrench[1]);
+    cmd.addDouble(Wrench[2]);
+    cmd.addDouble(Wrench[3]);
+    cmd.addDouble(Wrench[4]);
+    cmd.addDouble(Wrench[5]);
+    cmd.addDouble(duration);
     inPort.write(cmd, response);
     //
     return true;
@@ -1639,13 +1639,13 @@ bool RobotInterface::applyExternalWrench_1(std::string link, Vector6d Wrench, do
 
     // cmd.clear();
     cmd.addString(link);
-    cmd.addFloat64(Wrench[0]);
-    cmd.addFloat64(Wrench[1]);
-    cmd.addFloat64(Wrench[2]);
-    cmd.addFloat64(Wrench[3]);
-    cmd.addFloat64(Wrench[4]);
-    cmd.addFloat64(Wrench[5]);
-    cmd.addFloat64(duration);
+    cmd.addDouble(Wrench[0]);
+    cmd.addDouble(Wrench[1]);
+    cmd.addDouble(Wrench[2]);
+    cmd.addDouble(Wrench[3]);
+    cmd.addDouble(Wrench[4]);
+    cmd.addDouble(Wrench[5]);
+    cmd.addDouble(duration);
     l_hand_ExtWrench_inputPort.write(cmd, response);
 
     //

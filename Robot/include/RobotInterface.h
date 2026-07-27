@@ -30,7 +30,7 @@
 
 #include <yarp/dev/PolyDriver.h>
 #include <yarp/dev/IControlLimits2.h>
-#include <yarp/dev/IControlMode.h>
+#include <yarp/dev/IControlMode2.h>
 #include <yarp/dev/IPositionDirect.h>
 #include <yarp/dev/IPositionControl2.h>
 #include <yarp/dev/IVelocityControl2.h>
@@ -68,7 +68,7 @@ struct yarpDevice
     yarp::dev::IPositionControl    *ipos;
     yarp::dev::IPositionDirect     *iposDir;
     yarp::dev::IImpedanceControl   *iimp;
-    yarp::dev::IControlMode        *ictrl;
+    yarp::dev::IControlMode2        *ictrl;
     yarp::dev::IInteractionMode    *iint;
     yarp::dev::ITorqueControl      *itrq;
     yarp::dev::IEncoders           *iencs;

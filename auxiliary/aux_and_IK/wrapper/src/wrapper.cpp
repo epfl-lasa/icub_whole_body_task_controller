@@ -280,13 +280,13 @@ int wrapper::applyExternalWrench(std::string link, Eigen::VectorXd Force, double
 	yarp::os::Bottle& bot = ExternalWrenchPort.port.prepare();
 	bot.clear();
 	bot.addString(link);
-	bot.addFloat64(Force[0]);
-	bot.addFloat64(Force[1]);
-	bot.addFloat64(Force[2]);
-	bot.addFloat64(Force[3]);
-	bot.addFloat64(Force[4]);
-	bot.addFloat64(Force[5]);
-	bot.addFloat64(duration);
+	bot.addDouble(Force[0]);
+	bot.addDouble(Force[1]);
+	bot.addDouble(Force[2]);
+	bot.addDouble(Force[3]);
+	bot.addDouble(Force[4]);
+	bot.addDouble(Force[5]);
+	bot.addDouble(duration);
 	ExternalWrenchPort.port.write();
 }
 

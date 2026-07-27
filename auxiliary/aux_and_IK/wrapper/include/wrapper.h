@@ -34,7 +34,7 @@ struct jointConnector
     yarp::dev::PolyDriver 			robotDevice;
     yarp::dev::IPositionDirect 		*pos;
     yarp::dev::IEncoders 			*encs;
-    yarp::dev::IControlMode 		*ictrl;
+    yarp::dev::IControlMode2 		*ictrl;
     yarp::dev::IInteractionMode 	*iint;
     yarp::dev::IImpedanceControl 	*iimp;
     yarp::dev::ITorqueControl 		*itrq;

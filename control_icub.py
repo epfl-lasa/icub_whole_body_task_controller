@@ -1,16 +1,16 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Simple iCub controller via YARP Python bindings.
 Works with Gazebo simulation and real hardware.
 
 Usage:
     # Start yarpserver and Gazebo (or real robot) first, then:
-    python3 control_icub.py
+    python control_icub.py
 """
 
+from __future__ import print_function
 import sys
 import time
-from typing import List, Optional
 import yarp
 
 ROBOT = "icubSim"
@@ -25,19 +25,19 @@ TORSO_HOME = [0.0, 0.0, 0.0]
 LEG_HOME  = [25.0, 0.0, 0.0, -40.0, -15.0, 0.0]
 
 
-def connect(part: str) -> Optional[yarp.PolyDriver]:
+def connect(part):
     opts = yarp.Property()
     opts.put("device", "remote_controlboard")
-    opts.put("local",  f"/py_ctrl/{part}")
-    opts.put("remote", f"/{ROBOT}/{part}")
+    opts.put("local",  "/py_ctrl/{}".format(part))
+    opts.put("remote", "/{}/{}".format(ROBOT, part))
     driver = yarp.PolyDriver(opts)
     if not driver.isValid():
-        print(f"[WARN] Could not connect to /{ROBOT}/{part} -- skipping")
+        print("[WARN] Could not connect to /{}/{} -- skipping".format(ROBOT, part))
         return None
     return driver
 
 
-def read_encoders(driver: yarp.PolyDriver) -> List[float]:
+def read_encoders(driver):
     enc = driver.viewIEncoders()
     n   = enc.getAxes()
     buf = yarp.Vector(n)
@@ -45,7 +45,7 @@ def read_encoders(driver: yarp.PolyDriver) -> List[float]:
     return [round(buf[i], 2) for i in range(n)]
 
 
-def move(driver: yarp.PolyDriver, targets: List[float], speed: float = 15.0):
+def move(driver, targets, speed=15.0):
     pos = driver.viewIPositionControl()
     enc = driver.viewIEncoders()
     n   = enc.getAxes()
@@ -57,7 +57,7 @@ def move(driver: yarp.PolyDriver, targets: List[float], speed: float = 15.0):
     pos.positionMove(tgt.data())
 
 
-def wait_done(driver: yarp.PolyDriver, timeout: float = 10.0) -> bool:
+def wait_done(driver, timeout=10.0):
     pos   = driver.viewIPositionControl()
     start = time.time()
     while time.time() - start < timeout:
@@ -67,17 +67,17 @@ def wait_done(driver: yarp.PolyDriver, timeout: float = 10.0) -> bool:
     return False
 
 
-def demo_part(name: str, home: List[float]):
-    print(f"\n-- {name} --------------------------")
+def demo_part(name, home):
+    print("\n-- {} --------------------------".format(name))
     driver = connect(name)
     if driver is None:
         return
-    print(f"  encoders before : {read_encoders(driver)}")
-    print(f"  moving to home  : {home}")
+    print("  encoders before : {}".format(read_encoders(driver)))
+    print("  moving to home  : {}".format(home))
     move(driver, home)
     done = wait_done(driver)
-    print(f"  motion done     : {done}")
-    print(f"  encoders after  : {read_encoders(driver)}")
+    print("  motion done     : {}".format(done))
+    print("  encoders after  : {}".format(read_encoders(driver)))
     driver.close()
 
 
@@ -85,7 +85,7 @@ def main():
     yarp.Network.init()
 
     if not yarp.Network.checkNetwork(3.0):
-        print("[ERROR] YARP network unreachable — is yarpserver running?")
+        print("[ERROR] YARP network unreachable -- is yarpserver running?")
         yarp.Network.fini()
         sys.exit(1)
 

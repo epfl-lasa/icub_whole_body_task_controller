@@ -2,15 +2,16 @@
 # iCub Whole-Body Task Controller
 # Base: Ubuntu 18.04
 #
-# Dependency strategy:
-#   - robotology-superbuild v2020.02 → YARP + iCub (icub-main) + iDynTree
-#   - qpOASES 3.2.1 built manually at the path expected by CMakeLists.txt
+# Dependencies built from source:
+#   - YARP  v2.3.72  (last YARP 2.x release; protocol match with 2.3.64.13)
+#   - iDynTree  v0.11.2  (latest v0.x, compatible with YARP 2.x)
+#   - ICUB  v1.10.1  (requires YARP >= 2.3.72)
+#   - gazebo-yarp-plugins  v2.3.72  (YARP↔Gazebo bridge, controlboard plugin)
+#   - icub-gazebo  (worlds & models)
+#   - qpOASES  3.2.1  (built at path expected by CMakeLists.txt)
 #
-# Build:  docker compose build
+# Build:  docker compose build --build-arg JOBS=8
 #   or    docker build -t icub-controller .
-#
-# Build time: 30-60 min (superbuild compiles from source)
-# Parallelism: --build-arg JOBS=N  (default 4)
 # ─────────────────────────────────────────────────────────────────────────────
 FROM ubuntu:18.04
 
@@ -38,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     libboost-all-dev \
     libode-dev \
-    # IPOPT (required by iDynTree when ROBOTOLOGY_ENABLE_DYNAMICS is ON)
+    # IPOPT (required by iDynTree when IDYNTREE_USES_IPOPT is ON)
     coinor-libipopt-dev \
     # Qt5 (YARP GUIs: yarpmotorgui, yarpscope, etc.)
     qtbase5-dev \
@@ -47,21 +48,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libqt5widgets5 \
     qtdeclarative5-dev \
     qtmultimedia5-dev \
-    # Gazebo 9 (Ubuntu 18.04 default repos)
+    # Gazebo 9
     gazebo9 \
     libgazebo9-dev \
     # Misc
     swig \
     python3-dev \
     python3-pip \
+    libprotobuf-dev \
+    protobuf-compiler \
     iputils-ping \
     net-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── GCC 8 ────────────────────────────────────────────────────────────────────
-# Ubuntu 18.04 ships GCC 7.
-# GCC 7 only has <experimental/filesystem>; icub-models requires <filesystem>
-# which needs GCC 8+.  The project's -std=c++17 also works fine with GCC 8.
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test \
     && apt-get update \
     && apt-get install -y --no-install-recommends gcc-8 g++-8 \
@@ -71,60 +71,94 @@ RUN add-apt-repository ppa:ubuntu-toolchain-r/test \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── CMake 3.16 ───────────────────────────────────────────────────────────────
-# robotology-superbuild needs CMake >= 3.12; Ubuntu 16.04 ships 3.5.
 RUN wget -q \
     https://github.com/Kitware/CMake/releases/download/v3.16.9/cmake-3.16.9-Linux-x86_64.sh \
     -O /tmp/cmake.sh \
     && sh /tmp/cmake.sh --skip-license --prefix=/usr/local \
     && rm /tmp/cmake.sh
 
-# ─── robotology-superbuild v2020.02 ───────────────────────────────────────────
-# Builds: YARP v3.3.0 · icub-main v2.1.0 · iDynTree v2.0.0
-# v2020.02 is the earliest tagged release of the superbuild.
+# ─── Build prefix ─────────────────────────────────────────────────────────────
+ENV ROBOTOLOGY_INSTALL=/opt/robotology/install
+ENV ROBOTOLOGY_SRC=/opt/robotology/src
 ENV ROBOTOLOGY_SUPERBUILD_ROOT=/opt/robotology-superbuild
 
-RUN git clone --depth 1 \
-    --branch v2020.02 \
-    https://github.com/robotology/robotology-superbuild.git \
-    ${ROBOTOLOGY_SUPERBUILD_ROOT}
+RUN mkdir -p ${ROBOTOLOGY_INSTALL} ${ROBOTOLOGY_SRC} ${ROBOTOLOGY_SUPERBUILD_ROOT}/external
 
-RUN git config --global user.name "Docker Build" \
-    && git config --global user.email "docker@build.local"
+# ─── YARP v2.3.72 ─────────────────────────────────────────────────────────────
+RUN git clone --depth 1 --branch v2.3.72 \
+    https://github.com/robotology/yarp.git \
+    ${ROBOTOLOGY_SRC}/yarp
 
-RUN cd ${ROBOTOLOGY_SUPERBUILD_ROOT} \
+RUN cd ${ROBOTOLOGY_SRC}/yarp \
     && mkdir build && cd build \
     && cmake .. -G Ninja \
-        -DROBOTOLOGY_ENABLE_CORE:BOOL=ON \
-        -DROBOTOLOGY_ENABLE_DYNAMICS:BOOL=ON \
-        -DROBOTOLOGY_USES_GAZEBO:BOOL=ON \
-        -DROBOTOLOGY_USES_PYTHON:BOOL=ON \
-        -DROBOTOLOGY_USES_MATLAB:BOOL=OFF \
+        -DCMAKE_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL} \
         -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build . -- -j${JOBS}
-
-# ─── YARP GUI tools + Python bindings ────────────────────────────────────────
-# The superbuild leaves YARP_COMPILE_GUIS OFF; reconfigure YARP directly so
-# Qt5 is detected and yarpmotorgui is built and installed.
-# Python bindings are also enabled here (SWIG + Python 3) so that the
-# superbuild PYTHON=ON flag is honoured even after this reconfigure step.
-RUN cd /opt/robotology-superbuild/build/robotology/YARP \
-    && cmake . \
-        -DYARP_COMPILE_GUIS:BOOL=ON \
-        -DQt5_DIR=/usr/lib/x86_64-linux-gnu/cmake/Qt5 \
+        -DCREATE_LIB_MATH:BOOL=ON \
         -DYARP_COMPILE_BINDINGS:BOOL=ON \
         -DCREATE_PYTHON:BOOL=ON \
-        -DPYTHON_EXECUTABLE=/usr/bin/python3 \
-        -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m \
-        -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so \
+        -DCREATE_GUIS:BOOL=ON \
+    && ninja -j${JOBS} install \
+    && sed -i 's|set(YARP_HAS_MATH_LIB FALSE)|set(YARP_HAS_MATH_LIB TRUE)|' \
+        ${ROBOTOLOGY_INSTALL}/lib/cmake/YARP/YARPConfig.cmake
+
+# ─── iDynTree v0.11.2 ─────────────────────────────────────────────────────────
+RUN git clone --depth 1 --branch v0.11.2 \
+    https://github.com/robotology/idyntree.git \
+    ${ROBOTOLOGY_SRC}/idyntree
+
+RUN cd ${ROBOTOLOGY_SRC}/idyntree \
+    && mkdir build && cd build \
+    && cmake .. -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_PREFIX_PATH=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DIDYNTREE_USES_IPOPT:BOOL=ON \
+        -DIDYNTREE_USES_YARP:BOOL=ON \
     && ninja -j${JOBS} install
 
-# ─── qpOASES 3.2.1 ────────────────────────────────────────────────────────────
-# CMakeLists.txt looks for libqpOASES.so at:
-#   ${ROBOTOLOGY_SUPERBUILD_ROOT}/build/external/qpOASES/lib/
-# and for qpOASES headers at:
-#   ${ROBOTOLOGY_SUPERBUILD_ROOT}/external/qpOASES/include/
-# The superbuild already clones qpOASES source into external/qpOASES; we only
-# need to build it as a shared library at the path CMakeLists.txt expects.
+# ─── ICUB v1.10.1 ─────────────────────────────────────────────────────────────
+RUN git clone --depth 1 --branch v1.10.1 \
+    https://github.com/robotology/icub-main.git \
+    ${ROBOTOLOGY_SRC}/icub-main
+
+RUN cd ${ROBOTOLOGY_SRC}/icub-main \
+    && mkdir build && cd build \
+    && cmake .. -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_PREFIX_PATH=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_BUILD_TYPE=Release \
+    && ninja -j${JOBS} install
+
+# ─── gazebo-yarp-plugins v2.3.72 ──────────────────────────────────────────────
+RUN git clone --depth 1 --branch v2.3.72 \
+    https://github.com/robotology/gazebo-yarp-plugins.git \
+    ${ROBOTOLOGY_SRC}/gazebo-yarp-plugins
+
+RUN cd ${ROBOTOLOGY_SRC}/gazebo-yarp-plugins \
+    && mkdir build && cd build \
+    && cmake .. -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_PREFIX_PATH=${ROBOTOLOGY_INSTALL} \
+        -DCMAKE_BUILD_TYPE=Release \
+    && ninja -j${JOBS} install
+
+# ─── icub-gazebo ──────────────────────────────────────────────────────────────
+RUN git clone --depth 1 \
+    https://github.com/robotology/icub-gazebo.git \
+    ${ROBOTOLOGY_SRC}/icub-gazebo
+
+RUN cd ${ROBOTOLOGY_SRC}/icub-gazebo \
+    && mkdir build && cd build \
+    && cmake .. -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL} \
+    && ninja -j${JOBS} install
+
+# ─── qpOASES ──────────────────────────────────────────────────────────────────
+RUN git clone --depth 1 \
+    https://github.com/robotology-dependencies/qpOASES.git \
+    ${ROBOTOLOGY_SUPERBUILD_ROOT}/external/qpOASES
+
 RUN mkdir -p ${ROBOTOLOGY_SUPERBUILD_ROOT}/build/external/qpOASES \
     && cd ${ROBOTOLOGY_SUPERBUILD_ROOT}/build/external/qpOASES \
     && cmake ${ROBOTOLOGY_SUPERBUILD_ROOT}/external/qpOASES \
@@ -136,45 +170,38 @@ RUN mkdir -p ${ROBOTOLOGY_SUPERBUILD_ROOT}/build/external/qpOASES \
 
 # ─── Runtime environment ──────────────────────────────────────────────────────
 ENV ROBOTOLOGY_SUPERBUILD_SOURCE_DIR=${ROBOTOLOGY_SUPERBUILD_ROOT}
-ENV ROBOTOLOGY_SUPERBUILD_INSTALL_PREFIX=${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install
+ENV ROBOTOLOGY_SUPERBUILD_INSTALL_PREFIX=${ROBOTOLOGY_INSTALL}
 
-ENV PATH=${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/bin:${PATH}
+ENV PATH=${ROBOTOLOGY_INSTALL}/bin:${PATH}
 
 ENV LD_LIBRARY_PATH=\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/lib:\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/lib/yarp:\
+${ROBOTOLOGY_INSTALL}/lib:\
+${ROBOTOLOGY_INSTALL}/lib/yarp:\
 ${ROBOTOLOGY_SUPERBUILD_ROOT}/build/external/qpOASES/lib
 
-ENV CMAKE_PREFIX_PATH=${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install
+ENV CMAKE_PREFIX_PATH=${ROBOTOLOGY_INSTALL}
 
 ENV YARP_DATA_DIRS=\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/share/yarp:\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/share/iCub:\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/share/codyco
+${ROBOTOLOGY_INSTALL}/share/yarp:\
+${ROBOTOLOGY_INSTALL}/share/iCub:\
+${ROBOTOLOGY_INSTALL}/share/codyco
 
-ENV ICUB_DIR=${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install
+ENV ICUB_DIR=${ROBOTOLOGY_INSTALL}
 
 # ─── Python bindings ──────────────────────────────────────────────────────────
-# YARP installs its Python module under the install prefix; cover both the
-# generic "python3" path (Debian GNUInstallDirs default) and the versioned
-# one (python3.6) so import yarp works regardless of cmake's choice.
 ENV PYTHONPATH=\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/lib/python3/dist-packages:\
-${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/lib/python3.6/dist-packages
+${ROBOTOLOGY_INSTALL}/lib/python2.7/dist-packages:\
+${ROBOTOLOGY_INSTALL}/lib/python3/dist-packages:\
+${ROBOTOLOGY_INSTALL}/lib/python3.6/dist-packages
 
 # ─── Gazebo environment ───────────────────────────────────────────────────────
-# Mirrors what /usr/share/gazebo/setup.sh would source, extended with the
-# superbuild install outputs (gazebo-yarp-plugins + icub-gazebo models).
 ENV GAZEBO_MASTER_URI=http://localhost:11345
 ENV GAZEBO_MODEL_DATABASE_URI=http://models.gazebosim.org
-ENV GAZEBO_RESOURCE_PATH=/usr/share/gazebo-9
-ENV GAZEBO_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gazebo-9/plugins:${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/lib
-ENV GAZEBO_MODEL_PATH=/usr/share/gazebo-9/models:${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install/share/gazebo/models
+ENV GAZEBO_RESOURCE_PATH=/usr/share/gazebo-9:${ROBOTOLOGY_INSTALL}/share/gazebo
+ENV GAZEBO_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gazebo-9/plugins:${ROBOTOLOGY_INSTALL}/lib
+ENV GAZEBO_MODEL_PATH=/usr/share/gazebo-9/models:${ROBOTOLOGY_INSTALL}/share/gazebo/models
 
 # ─── Build the controller ─────────────────────────────────────────────────────
-# Source is COPY'd here at build time; the dev compose service later mounts the
-# host source over this path.  The build lives at /opt/hwbtc_build so the
-# volume mount never hides the compiled binary.
 WORKDIR /workspace/icub_whole_body_task_controller
 
 COPY . .
@@ -182,7 +209,7 @@ COPY . .
 RUN mkdir -p /opt/hwbtc_build && cd /opt/hwbtc_build \
     && cmake /workspace/icub_whole_body_task_controller \
         -DROBOTOLOGY_SUPERBUILD_ROOT=${ROBOTOLOGY_SUPERBUILD_ROOT} \
-        -DCMAKE_PREFIX_PATH=${ROBOTOLOGY_SUPERBUILD_ROOT}/build/install \
+        -DCMAKE_PREFIX_PATH=${ROBOTOLOGY_INSTALL} \
         -DCMAKE_BUILD_TYPE=Release \
     && make -j${JOBS}
 
